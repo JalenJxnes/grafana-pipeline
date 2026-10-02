@@ -1,0 +1,92 @@
+// Set logging level and format
+
+logging {
+  level  = "info"
+  format = "logfmt"
+}
+
+livedebugging {
+
+  enabled = true
+
+}
+
+// -------- Prometheus metrics from cAdvisor --------
+prometheus.exporter.cadvisor "prom_monitor" {
+    docker_only = true
+}
+
+discovery.relabel "prom_monitor" {
+    targets = prometheus.exporter.cadvisor.prom_monitor.targets
+    rule {
+            target_label = "job"
+            replacement = "integrations/docker"    
+        }
+
+    rule {
+        target_label = "instance"
+        replacement = constants.hostname    
+    }
+}
+
+prometheus.scrape "scraper" {
+    targets = discovery.relabel.prom_monitor.output
+    forward_to = [prometheus.remote_write.demo.receiver]
+    scrape_interval = "10s"
+}
+
+prometheus.remote_write "demo" {
+    endpoint {    
+        url = "http://prometheus:9090/api/v1/write"  
+    }
+}
+
+// -------- Loki logs from Docker socket --------
+// 1. Find all containers via socket
+discovery.docker "linux" {
+    host = "unix:///var/run/docker.sock"
+}
+
+// 2. Relabel container metadata into clean "container" label
+discovery.relabel "docker_logs" {
+    targets = []
+
+    rule {
+        source_labels = ["__meta_docker_container_name"]
+        regex = "/(.*)"
+        target_label = "container"
+    }
+}
+
+// 3. Tail logs from Docker containers
+loki.source.docker "default" {
+    host = "unix:///var/run/docker.sock"
+    targets = discovery.docker.linux.targets
+    relabel_rules = discovery.relabel.docker_logs.rules
+    forward_to = [loki.process.parse.receiver]
+}
+
+loki.process "parse" {
+    // Keep low cardinality fields; drop high cardinality fields
+    stage.labels {
+        values = {
+            container_id = "",
+            stream = "",
+        }    
+    }
+
+    // Drop noisy infrastructure containers
+    stage.drop {
+        source = "container"
+        expression = "^(grafana-alloy|grafana-loki|grafana|prometheus)$"
+    }
+
+    forward_to = [loki.write.local.receiver]
+}
+
+// 4. Ship to Loki
+loki.write "local" {
+	endpoint {
+		url = "http://grafana-loki:3100/loki/api/v1/push"
+	}
+}
