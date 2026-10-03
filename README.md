@@ -52,7 +52,7 @@ The pipeline consists of multiple interconnected components working together to 
 
 ### Monitoring Scripts
 
-- **Docker Monitor Bash Script** (`container-restart.bash`): 
+- **Docker Monitor Bash Script** (`docker-monitor.bash` and `container-restart.bash`): 
   - Checks the state of each container in a defined list of services
   - Automatically restarts any container that is stopped
   - Logs monitoring data to `docker-monitor.log` in structured JSON format
@@ -72,7 +72,7 @@ For each service listed in the `services` array, the script:
 
 #### Script Configuration
 
-- `services`: Array of container names to monitor (currently Docmost, Jellyfin, Keycloak, Nextcloud, Wiki.js, Grafana, Grafana Loki, and the RustDesk `hbbs`/`hbbr` containers)
+- `services`: Array of container names to monitor (currently Docmost, Jellyfin, Keycloak, Nextcloud, Wiki-Server, Grafana, Grafana Loki, and the RustDesk `hbbs`/`hbbr` containers)
 - `log_file`: Path to the JSON log file (`/usr/bin/docker-monitor.log`)
 - `max_wait`: Maximum time in seconds to wait for a restarted container to come up (default: 30)
 
@@ -97,7 +97,7 @@ Each run appends one JSON line per container, which Grafana Alloy and Loki can i
 Example crontab entry to run the script every 5 minutes:
 
 ```bash
-*/5 * * * * /path/to/container-restart.bash
+*/5 * * * * /path/to/docker-monitor.bash
 ```
 
 ### Container Management
@@ -109,7 +109,7 @@ Example crontab entry to run the script every 5 minutes:
 
 ## Screenshots
 
-This repository includes comprehensive screenshots that illustrate the complete observability setup:
+This repository includes screenshots that illustrate the complete observability setup:
 
 ### Grafana Dashboards
 - [Grafana_Dashboard.png](Grafana_Dashboard.png)
@@ -159,7 +159,7 @@ The pipeline can be customized by:
 2. Updating label assignments in Prometheus configuration
 3. Creating custom Grafana dashboards
 4. Extending the Docker monitoring script for additional metrics
-5. Adding or removing containers in the `services` array of `container-restart.bash`
+5. Adding or removing containers in the `services` array of `docker-monitor.bash` and `container-restart.bash`
 
 ## Troubleshooting
 
