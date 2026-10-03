@@ -21,7 +21,7 @@ The pipeline consists of multiple interconnected components working together to 
 1. **Data Collection Layer**
    - Prometheus scrapes system metrics from various sources including CAdvisor and Docker Health Exporter
    - Grafana Alloy collects and processes Docker container logs
-   - Custom bash scripts monitor container health
+   - Custom bash scripts monitor container health and automatically restart stopped containers
 
 2. **Processing Layer**
    - Configuration files define scraping rules and label assignments
@@ -52,11 +52,53 @@ The pipeline consists of multiple interconnected components working together to 
 
 ### Monitoring Scripts
 
-- **Docker Monitor Bash Script**: 
-  - Scrapes container health information
-  - Logs monitoring data to `docker-monitor.log`
+- **Docker Monitor Bash Script** (`container-restart.bash`): 
+  - Checks the state of each container in a defined list of services
+  - Automatically restarts any container that is stopped
+  - Logs monitoring data to `docker-monitor.log` in structured JSON format
   - Executes on a 5-minute cron job schedule
   - Provides container lifecycle tracking
+
+#### How the Script Works
+
+For each service listed in the `services` array, the script:
+
+1. Looks up the container ID by name (including stopped containers)
+2. Logs `not_found` and moves on if no matching container exists
+3. Logs `running` and skips the container if it is already running
+4. Logs `restart_attempted` and runs `docker start` if the container is stopped
+5. Polls the container every 2 seconds, up to `max_wait` (30 seconds), to confirm it came up
+6. Logs `restarted_ok` on success, or `restart_failed` if the container is still down after the wait
+
+#### Script Configuration
+
+- `services`: Array of container names to monitor (currently Docmost, Jellyfin, Keycloak, Nextcloud, Wiki.js, Grafana, Grafana Loki, and the RustDesk `hbbs`/`hbbr` containers)
+- `log_file`: Path to the JSON log file (`/usr/bin/docker-monitor.log`)
+- `max_wait`: Maximum time in seconds to wait for a restarted container to come up (default: 30)
+
+#### Log Format
+
+Each run appends one JSON line per container, which Grafana Alloy and Loki can ingest for log analysis:
+
+```json
+{"time":"2025-01-01T12:00:00-05:00","container":"grafana","status":"running","action":"none","host":"docker-host"}
+```
+
+| Field | Description |
+|-------|-------------|
+| `time` | ISO 8601 timestamp of the check |
+| `container` | Name of the monitored service |
+| `status` | `running`, `stopped`, or `not_found` |
+| `action` | `none`, `restart_attempted`, `restarted_ok`, or `restart_failed` |
+| `host` | Hostname of the Docker host |
+
+#### Cron Setup
+
+Example crontab entry to run the script every 5 minutes:
+
+```bash
+*/5 * * * * /path/to/container-restart.bash
+```
 
 ### Container Management
 
@@ -117,6 +159,7 @@ The pipeline can be customized by:
 2. Updating label assignments in Prometheus configuration
 3. Creating custom Grafana dashboards
 4. Extending the Docker monitoring script for additional metrics
+5. Adding or removing containers in the `services` array of `container-restart.bash`
 
 ## Troubleshooting
 
@@ -125,6 +168,7 @@ The pipeline can be customized by:
 - **Data Not Appearing in Grafana**: Check Prometheus scraping configuration
 - **Log Processing Failures**: Review Alloy configuration and log permissions
 - **Container Monitoring Gaps**: Verify cron job execution and script permissions
+- **Container Not Restarting**: Check `docker-monitor.log` for `restart_failed` entries, confirm the container name in the `services` array matches the actual container name, and make sure the cron user has permission to run Docker commands
 
 ### Logs
 

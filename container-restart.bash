@@ -1,7 +1,7 @@
 #!/bin/bash
 
-services=("docmost" "jellyfin" "keycloak" "nextcloud-data-nextcloud-1" "wiki-server" "grafana" "grafana-loki" "hbbr" "hbbs")
-log_file="/usr/bin/docker-monitor.log"
+services=("docmost" "jellyfin" "keycloak" "nextcloud-data-nextcloud-1" "wiki-server" "grafana" "grafana-loki" "hbbr" "hbbs" "grafana-alloy")
+log_file="/etc/alloy/docker-monitor.log"
 max_wait=30 #max time to wait for containers to start
 
 log () {
@@ -10,7 +10,7 @@ log () {
 }
 
 for svc in "${services[@]}"; do
-	cid=$(docker ps -aq -f "name=$svc" | head -n1)
+	cid=$(docker ps -aq -f "name=^/${svc}$" | head -n1)
 
 	# Container doesn't exist
 	if [ -z "$cid" ]; then
@@ -34,7 +34,7 @@ for svc in "${services[@]}"; do
 	#Wait for container to start
 	elapsed=0
 	while [ "$elapsed" -lt "$max_wait" ]; do
-		running=$(docker inspect -f '${{.State.Running}}' "$cid")
+		running=$(docker inspect -f '{{.State.Running}}' "$cid" 2>/dev/null)
 		if [ "$running" = "true" ]; then
 			log "$svc" "running" "restarted_ok"
 			break
